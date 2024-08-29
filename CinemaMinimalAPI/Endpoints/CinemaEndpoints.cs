@@ -30,14 +30,31 @@ public static class CinemaEndpoints
             .WithName("Create cinema")
             .WithDescription("Adds new cinema to DB");
 
-        // Get all cinemas
-        endpoint.MapGet("/", async (CinemaContext context) =>
+        // Get all cinemas with filters and pagination
+        endpoint.MapGet("/", async (
+            CinemaContext context,
+            [FromQuery] string? name = null,
+            [FromQuery] string? location = null,
+            [FromQuery] int page = 0,
+            [FromQuery] int size = 10) =>
         {
-            var cinemas = await context.Cinemas.ToListAsync();
+            var cinemasQuery = context.Cinemas.AsQueryable();
+
+            if (!string.IsNullOrEmpty(name))
+                cinemasQuery = cinemasQuery.Where(c => c.Name.Contains(name));
+            
+            if (!string.IsNullOrEmpty(location))
+                cinemasQuery = cinemasQuery.Where(c => c.Location.Contains(location));
+            
+            var cinemas = await cinemasQuery
+                .Skip(page * size)
+                .Take(size)
+                .ToListAsync();
+
             return Results.Ok(cinemas);
         })
-            .WithName("Get all cinemas")
-            .WithDescription("Returns all cinemas");
+        .WithName("Get all cinemas with filters and pagination")
+        .WithDescription("Returns all cinemas with optional filters and pagination");
 
         // Get cinema by ID
         endpoint.MapGet("/{id:int}", async (CinemaContext context, [FromRoute]int id) =>
@@ -122,22 +139,50 @@ public static class CinemaEndpoints
         .WithName("Create session")
         .WithDescription("Creates a session for a specific cinema");
 
-
-        // Get all sessions from cinema
-        endpoint.MapGet("/{cinemaId:int}/sessions", async (CinemaContext context, IMapper mapper, [FromRoute]int cinemaId) =>
+        // Get all sessions from cinema with filters and pagination
+        endpoint.MapGet("/{cinemaId:int}/sessions", async (
+            CinemaContext context,
+            IMapper mapper,
+            [FromRoute] int cinemaId,
+            [FromQuery] int? movieId = null,
+            [FromQuery] DateTime? startTime = null,
+            [FromQuery] DateTime? endTime = null,
+            [FromQuery] int page = 0,
+            [FromQuery] int size = 10) =>
         {
-            var cinema = await context.Cinemas.Where(c => c.Id == cinemaId).Include(c => c.Sessions).ThenInclude(s => s.Movie).FirstOrDefaultAsync();
+            var cinema = await context.Cinemas
+                .Where(c => c.Id == cinemaId)
+                .Include(c => c.Sessions)
+                .ThenInclude(s => s.Movie)
+                .FirstOrDefaultAsync();
+
             if (cinema is null)
             {
                 return Results.NotFound();
             }
 
-            var sessions = cinema.Sessions;
-            var sessionDtos = mapper.Map<IEnumerable<SessionDTO>>(cinema.Sessions);
+            var sessionsQuery = cinema.Sessions.AsQueryable();
+
+            if (movieId.HasValue)    
+                sessionsQuery = sessionsQuery.Where(s => s.MovieId == movieId.Value);
+           
+            if (startTime.HasValue)
+                sessionsQuery = sessionsQuery.Where(s => s.StartTime >= startTime.Value);
+            
+            if (endTime.HasValue)
+                sessionsQuery = sessionsQuery.Where(s => s.EndTime <= endTime.Value);
+            
+            var sessions = sessionsQuery
+                .Skip(page * size)
+                .Take(size)
+                .ToList();
+
+            var sessionDtos = mapper.Map<IEnumerable<SessionDTO>>(sessions);
+
             return Results.Ok(sessionDtos);
         })
-            .WithName("Get all sessions from cinema")
-            .WithDescription("Returns all sessions from a specific cinema");
+        .WithName("Get all sessions from cinema with filters and pagination")
+        .WithDescription("Returns all sessions from a specific cinema with optional filters and pagination");
 
         // Get session by id
         endpoint.MapGet("/{cinemaId:int}/sessions/{sessionId:int}", async (CinemaContext context, IMapper mapper, [FromRoute]int cinemaId, [FromRoute] int sessionId) =>
@@ -160,6 +205,7 @@ public static class CinemaEndpoints
         // Update session
         endpoint.MapPut("/{cinemaId:int}/sessions/{sessionId:int}", async (
             CinemaContext context,
+            IMapper mapper,
             [FromRoute]int cinemaId,
             [FromRoute]int sessionId,
             [FromBody]AddSessionDTO updatedSession) =>
@@ -185,8 +231,8 @@ public static class CinemaEndpoints
             session.EndTime = updatedSession.EndTime;
 
             await context.SaveChangesAsync();
-
-            return Results.Ok();
+            
+            return Results.Ok(mapper.Map<SessionDTO>(session));
         })
             .WithName("Update session")
             .WithDescription("Updates session");

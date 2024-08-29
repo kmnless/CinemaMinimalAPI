@@ -14,78 +14,13 @@ public static class MovieEndpoints
     {
         var endpoint = app.MapGroup("/api/movies");
 
-        /*
-         // Get all movies with filtration and pagination
-        endpoint.MapGet("/", async (
-            CinemaContext context,
-            IMapper mapper,
-            [FromQuery] int page = 0,
-            [FromQuery] int size = 10,
-            [FromQuery] string? search = null,
-            [FromQuery] int? genreId = null,
-            [FromQuery] int? directorId = null) =>
-        {
-            var moviesQuery = context.Movies
-                .Include(m => m.Genre)
-                .Include(m => m.Director)
-                .AsQueryable();
-
-            if (!string.IsNullOrEmpty(search))
-            {
-                moviesQuery = moviesQuery.Where(m => m.Title.Contains(search));
-            }
-
-            if (genreId.HasValue)
-            {
-                moviesQuery = moviesQuery.Where(m => m.GenreId == genreId.Value);
-            }
-
-            if (directorId.HasValue)
-            {
-                moviesQuery = moviesQuery.Where(m => m.DirectorId == directorId.Value);
-            }
-
-            var movies = await moviesQuery
-                .Skip(page * size)
-                .Take(size)
-                .ToListAsync();
-
-            var movieDtos = mapper.Map<IEnumerable<MovieDTO>>(movies);
-            return Results.Ok(movieDtos);
-        })
-            .WithName("Get All Movies")
-            .WithDescription("Returns all movies with pagination and search");
-        */
-
-        // Get all movies with pagination
-        endpoint.MapGet("/all", async (
-            CinemaContext context,
-            IMapper mapper,
-            [FromQuery] int page = 0,
-            [FromQuery] int size = 10) =>
-        {
-            var totalMovies = await context.Movies.CountAsync();
-            var movies = await context.Movies
-                .Include(m => m.Genre)
-                .Include(m => m.Director)
-                .Skip(page * size)
-                .Take(size)
-                .ToListAsync();
-
-            var movieDtos = mapper.Map<IEnumerable<MovieDTO>>(movies);
-
-            return Results.Ok(movieDtos);
-        })
-        .WithName("Get All Movies")
-        .WithDescription("Returns all movies with pagination");
-
         // Search movies with filters
         endpoint.MapGet("/", async (
             CinemaContext context,
             IMapper mapper,
-            [FromQuery] string? search = null,
-            [FromQuery] int? genreId = null,
-            [FromQuery] int? directorId = null,
+            [FromQuery] string? movieName = null,
+            [FromQuery] string? genreName = null,
+            [FromQuery] string? directorName = null,
             [FromQuery] int page = 0,
             [FromQuery] int size = 10) =>
         {
@@ -94,20 +29,14 @@ public static class MovieEndpoints
                 .Include(m => m.Director)
                 .AsQueryable();
 
-            if (!string.IsNullOrEmpty(search))
-            {
-                moviesQuery = moviesQuery.Where(m => m.Title.Contains(search));
-            }
+            if (!string.IsNullOrEmpty(movieName))
+                moviesQuery = moviesQuery.Where(m => m.Title.Contains(movieName));
+            
+            if (!string.IsNullOrEmpty(genreName))
+                moviesQuery = moviesQuery.Where(m => m.Genre.Name.Contains(genreName));
 
-            if (genreId.HasValue)
-            {
-                moviesQuery = moviesQuery.Where(m => m.GenreId == genreId.Value);
-            }
-
-            if (directorId.HasValue)
-            {
-                moviesQuery = moviesQuery.Where(m => m.DirectorId == directorId.Value);
-            }
+            if (!string.IsNullOrEmpty(directorName))
+                moviesQuery = moviesQuery.Where(m => m.Director.Name.Contains(directorName));
 
             var movies = await moviesQuery
                 .Skip(page * size)
@@ -120,7 +49,6 @@ public static class MovieEndpoints
         })
         .WithName("Search Movies")
         .WithDescription("Returns movies with filters and pagination");
-
 
         // Get movie by id
         endpoint.MapGet("/{id:int}", async (CinemaContext context, IMapper mapper, [FromRoute]int id) =>

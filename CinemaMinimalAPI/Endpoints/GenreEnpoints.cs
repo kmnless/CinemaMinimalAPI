@@ -11,14 +11,27 @@ public static class GenreEndpoints
     {
         var endpoint = app.MapGroup("/api/genres");
 
-        // Get all genres
-        endpoint.MapGet("/", async (CinemaContext context) =>
+        // Get all genres with optional name filter and pagination
+        app.MapGet("/api/genres", async (
+            CinemaContext context,
+            [FromQuery] string? name = null,
+            [FromQuery] int page = 0,
+            [FromQuery] int size = 10) =>
         {
-            var genres = await context.Genres.ToListAsync();
+            var genresQuery = context.Genres.AsQueryable();
+
+            if (!string.IsNullOrEmpty(name))
+                genresQuery = genresQuery.Where(g => g.Name.Contains(name));
+
+            var genres = await genresQuery
+                .Skip(page * size)
+                .Take(size)
+                .ToListAsync();
+
             return Results.Ok(genres);
         })
-            .WithName("Get all genres")
-            .WithDescription("Returns all genres");
+        .WithName("Get all genres with filters and pagination")
+        .WithDescription("Returns all genres with optional name filter and pagination");
 
         // Get genre by ID
         endpoint.MapGet("/{id:int}", async (CinemaContext context, [FromRoute]int id) =>

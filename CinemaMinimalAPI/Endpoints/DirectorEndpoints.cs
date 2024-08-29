@@ -11,14 +11,27 @@ public static class DirectorEndpoints
     {
         var endpoint = app.MapGroup("/api/directors");
 
-        // Get all directors
-        endpoint.MapGet("/", async (CinemaContext context) =>
+        // Get all directors with filters and pagination
+        app.MapGet("/api/directors", async (
+            CinemaContext context,
+            [FromQuery] string? name = null,
+            [FromQuery] int page = 0,
+            [FromQuery] int size = 10) =>
         {
-            var directors = await context.Directors.ToListAsync();
+            var directorsQuery = context.Directors.AsQueryable();
+
+            if (!string.IsNullOrEmpty(name))
+                directorsQuery = directorsQuery.Where(d => d.Name.Contains(name));
+      
+            var directors = await directorsQuery
+                .Skip(page * size)
+                .Take(size)
+                .ToListAsync();
+
             return Results.Ok(directors);
         })
-            .WithName("Get all directors")
-            .WithDescription("Returns all directors");
+        .WithName("Get all directors with filters and pagination")
+        .WithDescription("Returns all directors with optional filters and pagination");
 
         // Get director by ID
         endpoint.MapGet("/{id:int}", async (CinemaContext context, [FromRoute]int id) =>
